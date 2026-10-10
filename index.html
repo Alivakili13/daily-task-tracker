@@ -1,0 +1,217 @@
+```html
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>مدیریت کارهای روزانه</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 30px 16px;
+      min-height: 100vh;
+      background: #f3f5fb;
+      color: #20243a;
+      font-family: Tahoma, Arial, sans-serif;
+    }
+
+    main {
+      max-width: 650px;
+      margin: 30px auto;
+      padding: 25px;
+      background: white;
+      border: 1px solid #e8eaf2;
+      border-radius: 20px;
+      box-shadow: 0 15px 45px #252b5510;
+    }
+
+    h1 { margin-bottom: 8px; }
+    .subtitle { color: #737990; margin-bottom: 25px; }
+
+    form { display: flex; gap: 10px; }
+
+    input[type="text"] {
+      flex: 1;
+      min-width: 0;
+      padding: 13px;
+      border: 1px solid #dfe3ee;
+      border-radius: 10px;
+      font: inherit;
+    }
+
+    button {
+      padding: 11px 14px;
+      border: 0;
+      border-radius: 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .add { background: #5b63e6; color: white; }
+    .filters { display: flex; gap: 8px; margin: 20px 0; flex-wrap: wrap; }
+    .filter { background: #f0f1f8; color: #4f5570; }
+    .filter.active { background: #e5e7ff; color: #454dc9; }
+
+    ul { list-style: none; padding: 0; display: grid; gap: 10px; }
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid #e8eaf2;
+      border-radius: 12px;
+    }
+
+    li input { accent-color: #5b63e6; }
+    li span { flex: 1; overflow-wrap: anywhere; }
+    li.done span { color: #999; text-decoration: line-through; }
+    .delete { background: #fff0f2; color: #c63e55; }
+    #empty { color: #858ba0; text-align: center; padding: 20px 0; }
+    #count { color: #737990; font-size: 14px; }
+    
+    @media (max-width: 480px) {
+      main { padding: 18px; margin: 10px auto; }
+      form { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>کارهای روزانه</h1>
+    <p class="subtitle">کارهایت را برنامه‌ریزی کن و پیشرفتت را ببین.</p>
+
+    <form id="task-form">
+      <input id="task-input" type="text"
+        placeholder="مثلاً: یادگیری جاوااسکریپت"
+        maxlength="180" required>
+      <button class="add" type="submit">افزودن کار +</button>
+    </form>
+
+    <div class="filters">
+      <button class="filter active" data-filter="all">همه</button>
+      <button class="filter" data-filter="active">در حال انجام</button>
+      <button class="filter" data-filter="done">انجام‌شده</button>
+    </div>
+
+    <p id="count"></p>
+    <ul id="task-list"></ul>
+    <p id="empty">هنوز کاری ثبت نشده است.</p>
+  </main>
+
+  <script>
+    const KEY = "daily-task-tracker";
+    const form = document.querySelector("#task-form");
+    const input = document.querySelector("#task-input");
+    const list = document.querySelector("#task-list");
+    const empty = document.querySelector("#empty");
+    const count = document.querySelector("#count");
+    const filters = [...document.querySelectorAll("[data-filter]")];
+
+    let tasks = loadTasks();
+    let filter = "all";
+
+    function loadTasks() {
+      try {
+        const data = JSON.parse(localStorage.getItem(KEY) || "[]");
+        return Array.isArray(data) ? data.filter(task =>
+          task && typeof task.id === "string" &&
+          typeof task.title === "string" &&
+          typeof task.done === "boolean"
+        ) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveTasks() {
+      localStorage.setItem(KEY, JSON.stringify(tasks));
+    }
+
+    function render() {
+      list.replaceChildren();
+
+      const visible = tasks.filter(task =>
+        filter === "all" ||
+        (filter === "active" && !task.done) ||
+        (filter === "done" && task.done)
+      );
+
+      visible.forEach(task => {
+        const item = document.createElement("li");
+        if (task.done) item.classList.add("done");
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = task.done;
+        checkbox.setAttribute("aria-label", "تغییر وضعیت کار");
+
+        checkbox.addEventListener("change", () => {
+          task.done = checkbox.checked;
+          saveTasks();
+          render();
+        });
+
+        const title = document.createElement("span");
+        title.textContent = task.title;
+
+        const remove = document.createElement("button");
+        remove.className = "delete";
+        remove.textContent = "حذف";
+        remove.addEventListener("click", () => {
+          tasks = tasks.filter(t => t.id !== task.id);
+          saveTasks();
+          render();
+        });
+
+        item.append(checkbox, title, remove);
+        list.append(item);
+      });
+
+      empty.hidden = visible.length > 0;
+      count.textContent =
+        `تعداد کارهای باقی‌مانده: ${
+          new Intl.NumberFormat("fa-IR").format(
+            tasks.filter(task => !task.done).length
+          )
+        }`;
+
+      filters.forEach(button => {
+        button.classList.toggle(
+          "active", button.dataset.filter === filter
+        );
+      });
+    }
+
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      const title = input.value.trim();
+      if (!title) return;
+
+      tasks.unshift({
+        id: `${Date.now()}-${Math.random()}`,
+        title,
+        done: false
+      });
+
+      saveTasks();
+      input.value = "";
+      render();
+      input.focus();
+    });
+
+    filters.forEach(button => {
+      button.addEventListener("click", () => {
+        filter = button.dataset.filter;
+        render();
+      });
+    });
+
+    render();
+  </script>
+</body>
+</html>
+```
+
